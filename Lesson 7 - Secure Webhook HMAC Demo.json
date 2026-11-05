@@ -1,0 +1,91 @@
+{
+  "name": "Lesson 7 - Secure Webhook HMAC Demo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lesson7-secure-webhook",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "5ad555ca-7ad1-4eec-8d24-02fe8d5e702d",
+      "name": "Webhook POST",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "66dbb7c7-0457-4953-9670-ee1d12655dd5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Set WEBHOOK_SECRET as an environment variable on the n8n server.\n// Self-hosted n8n Code node must allow built-in crypto (NODE_FUNCTION_ALLOW_BUILTIN=crypto).\nconst crypto = require('crypto');\nconst input = $input.first().json;\nconst headers = input.headers || {};\nconst signature = String(headers['x-webhook-signature'] || headers['X-Webhook-Signature'] || '');\nconst secret = $env.WEBHOOK_SECRET;\nif (!secret) return [{json:{ok:false,statusCode:500,message:'WEBHOOK_SECRET not configured'}}];\n// Webhook rawBody option supplies the unparsed request body (typically input.body).\nconst raw = input.body;\nif (typeof raw !== 'string') return [{json:{ok:false,statusCode:500,message:'Raw body not available; check Webhook Raw Body setting'}}];\nconst expected = 'sha256=' + crypto.createHmac('sha256',secret).update(raw,'utf8').digest('hex');\nconst a=Buffer.from(signature,'utf8'); const b=Buffer.from(expected,'utf8');\nconst valid=a.length===b.length && crypto.timingSafeEqual(a,b);\nif (!valid) return [{json:{ok:false,statusCode:401,message:'Invalid or missing HMAC signature'}}];\nlet payload; try {payload=JSON.parse(raw)} catch(e) {return [{json:{ok:false,statusCode:400,message:'Invalid JSON payload'}}]};\nif (!payload.event || !payload.customer_id) return [{json:{ok:false,statusCode:400,message:'event and customer_id are required'}}];\nreturn [{json:{ok:true,statusCode:200,message:'Webhook received and verified',event:payload.event,customer_id:payload.customer_id,query:input.query||{},headerNames:Object.keys(headers)}}];"
+      },
+      "id": "912080f1-6a7e-463a-b2a8-37aba0da7659",
+      "name": "Validate HMAC and Parse Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      },
+      "id": "f92b02ac-b1b5-478f-9dda-85d8f6ee3bf6",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        624,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook POST": {
+      "main": [
+        [
+          {
+            "node": "Validate HMAC and Parse Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate HMAC and Parse Payload": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c6d61fb0-b42e-46fa-9ad8-12f85bb69a43",
+  "meta": {
+    "instanceId": "a03c7678428ef19ededbf912f16f7d5798ec7b9ab4c17f2a2def6a9e791e7215"
+  },
+  "nodeGroups": [],
+  "id": "3bDRWWy3GIU6l36W",
+  "tags": []
+}
